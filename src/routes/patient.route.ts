@@ -44,6 +44,7 @@ router.patch(
 );
 
 router.delete(
+    
     '/:id',
     authorize(['Hospital Admin', 'Super Admin']),
     (req: Request, res: Response, next: NextFunction) => patientController.deletePatient(req as any, res, next)

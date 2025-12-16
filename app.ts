@@ -2,7 +2,7 @@
 
 import express, { type Request, type Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
-import cors from 'cors'; 
+import cors from 'cors';
 
 import { connectDB, syncDbModels } from './config/database';
 import { initializeModels, associateModels, sequelize, models } from './src/models/index';
@@ -16,9 +16,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3050;
 
-// 2. CONFIGURATION CORS
+
 app.use(cors({
-    origin: 'http://localhost:5000', // Votre frontend
+    origin: 'http://localhost:4000',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true

@@ -1,47 +1,42 @@
-import { DataTypes, Model, Optional, BelongsToGetAssociationMixin, HasManyGetAssociationsMixin, HasOneGetAssociationMixin, Sequelize } from 'sequelize';
+import { DataTypes, Model, Optional, BelongsToGetAssociationMixin, HasManyGetAssociationsMixin, Sequelize } from 'sequelize';
 import { AllModels } from './index';
 import Hospital from './hospital';
 import User from './user';
 import DoctorSchedule from './doctorSchedule';
 import Appointment from './appointment';
 
-// --- ATTRIBUTES & INTERFACES ---
 export interface DoctorAttributes {
     id: string;
     lastName: string;
     firstName: string;
     specialty: string;
+    phone?: string; // Ajouté : utile pour contacter un externe sans compte User
+    email?: string; // Ajouté : utile pour la correspondance hors plateforme
     hospitalId: string;
-    userId: string; // Lien direct vers le compte User
+    userId?: string | null; // Rendu OPTIONNEL pour les intervenants externes
 }
 
-export interface DoctorCreationAttributes extends Optional<DoctorAttributes, 'id'> {}
+export interface DoctorCreationAttributes extends Optional<DoctorAttributes, 'id' | 'userId' | 'phone' | 'email'> {}
 
-// --- CLASS DEFINITION ---
 class Doctor extends Model<DoctorAttributes, DoctorCreationAttributes> implements DoctorAttributes {
     public id!: string;
     public lastName!: string;
     public firstName!: string;
     public specialty!: string;
+    public phone?: string;
+    public email?: string;
     public hospitalId!: string;
-    public userId!: string;
+    public userId?: string | null;
 
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
 
-    // Mixins d'association
+    // Mixins
     public getHospital!: BelongsToGetAssociationMixin<Hospital>;
     public getUser!: BelongsToGetAssociationMixin<User>;
     public getSchedules!: HasManyGetAssociationsMixin<DoctorSchedule>;
     public getAppointments!: HasManyGetAssociationsMixin<Appointment>;
 
-    // Propriétés de navigation
-    public hospital?: Hospital;
-    public user?: User;
-    public schedules?: DoctorSchedule[];
-    public appointments?: Appointment[];
-
-    // --- Méthode statique pour INITIALISER le modèle ---
     public static initialize(sequelizeInstance: Sequelize) {
         Doctor.init(
             {
@@ -67,28 +62,28 @@ class Doctor extends Model<DoctorAttributes, DoctorCreationAttributes> implement
                     allowNull: false,
                     field: 'specialty'
                 },
+                phone: {
+                    type: DataTypes.STRING(20),
+                    allowNull: true,
+                },
+                email: {
+                    type: DataTypes.STRING(150),
+                    allowNull: true,
+                },
                 hospitalId: {
                     type: DataTypes.UUID,
                     allowNull: false,
                     field: 'hospital_id',
-                    references: {
-                        model: 'hospitals',
-                        key: 'hospital_id',
-                    },
-                    onUpdate: 'CASCADE',
-                    onDelete: 'RESTRICT',
+                    references: { model: 'hospitals', key: 'hospital_id' },
                 },
                 userId: {
                     type: DataTypes.UUID,
-                    allowNull: false,
-                    unique: true, // Un docteur = un profil utilisateur
+                    allowNull: true, // IMPORTANT : Permet d'avoir des médecins sans compte User
+                    unique: true,
                     field: 'user_id',
-                    references: {
-                        model: 'users',
-                        key: 'user_id',
-                    },
+                    references: { model: 'users', key: 'user_id' },
                     onUpdate: 'CASCADE',
-                    onDelete: 'RESTRICT',
+                    onDelete: 'SET NULL', // Si l'User est supprimé, le profil Doctor reste (archive)
                 },
             },
             {
@@ -97,28 +92,15 @@ class Doctor extends Model<DoctorAttributes, DoctorCreationAttributes> implement
                 timestamps: true,
                 modelName: 'Doctor',
                 underscored: true,
-                indexes: [
-                    { fields: ['hospital_id', 'last_name', 'first_name'], name: 'idx_doctor_name_hospital' },
-                    { fields: ['specialty'] },
-                ]
             }
         );
     }
 
-    // --- Méthode statique pour définir les ASSOCIATIONS ---
     public static associate(models: AllModels) {
-        // Many-to-One vers Hospital (Ancrage)
         Doctor.belongsTo(models.Hospital, { foreignKey: 'hospital_id', as: 'hospital' });
-
-        // One-to-One vers User
         Doctor.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
-
-        // One-to-Many vers Planning et Rendez-vous
         Doctor.hasMany(models.DoctorSchedule, { foreignKey: 'doctor_id', as: 'schedules' });
         Doctor.hasMany(models.Appointment, { foreignKey: 'doctor_id', as: 'appointments' });
-
-        // One-to-Many vers Rapports signés (si vous les gérez ici, sinon via MedicalReport.signedBy)
-        // Doctor.hasMany(models.MedicalReport, { foreignKey: 'signed_by', as: 'signedReports' });
     }
 }
 

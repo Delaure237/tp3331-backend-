@@ -107,8 +107,8 @@ export const associateModels = (allModels: AllModels): void => {
 // --- 8. INITIALISATION ET ASSOCIATION IMMÉDIATES DES MODÈLES ---
 // 🛑 IMPORTANT : COMMENTEZ CES LIGNES DANS LE FICHIER INDEX.TS
 // ➡️ CORRECTION 4 : Commenter ET corriger la faute de frappe
-// initializeModels(sequelize);
-// associateModels(models);
+initializeModels(sequelize);
+ associateModels(models);
 
 // --- 9. Exportation ---
 export { sequelize, models };

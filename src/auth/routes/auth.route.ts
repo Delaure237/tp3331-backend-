@@ -1,5 +1,3 @@
-// src/auth/routes/auth.routes.ts
-
 import { Router, RequestHandler } from 'express';
 import AuthController from '../controllers/auth.controller';
 import { authenticate } from '../middlewares/auth.middleware';
@@ -19,14 +17,18 @@ router.post('/signup/patient', AuthController.signUpPatient as RequestHandler);
 
 /**
  * @route POST /api/v1/auth/signup/hospital
- * Utilise hospitalUpload pour gérer les logos et images
  */
 router.post('/signup/hospital', hospitalUpload, AuthController.registerHospital as RequestHandler);
 
+// ----------------------------------------------------------------------
+// 2. Validation & Authentification (Ouvertes - Publiques)
+// ----------------------------------------------------------------------
 
-// ----------------------------------------------------------------------
-// 2. Routes de Connexion et Mots de Passe (Ouvertes - Publiques)
-// ----------------------------------------------------------------------
+/**
+ * @route POST /api/v1/auth/verify-otp
+ * NOUVEAU : Valide l'email et active le compte (pose le cookie JWT)
+ */
+router.post('/verify-otp', AuthController.verifyOtp as RequestHandler);
 
 /**
  * @route POST /api/v1/auth/login
@@ -34,24 +36,33 @@ router.post('/signup/hospital', hospitalUpload, AuthController.registerHospital 
 router.post('/login', AuthController.login as RequestHandler);
 
 /**
+ * @route POST /api/v1/auth/logout
+ */
+router.post('/logout', AuthController.logout as RequestHandler);
+
+// ----------------------------------------------------------------------
+// 3. Mots de Passe (Ouvertes - Publiques)
+// ----------------------------------------------------------------------
+
+/**
  * @route POST /api/v1/auth/forgot-password
+ * Envoie un OTP de réinitialisation
  */
 router.post('/forgot-password', AuthController.forgotPassword as RequestHandler);
 
 /**
  * @route POST /api/v1/auth/reset-password
+ * Valide l'OTP et change le mot de passe
  */
 router.post('/reset-password', AuthController.resetPassword as RequestHandler);
 
 
 // ----------------------------------------------------------------------
-// 3. Routes Protégées (Nécessitent authenticate)
-// Le middleware 'authenticate' remplit req.user, indispensable pour ces routes.
+// 4. Routes Protégées (Nécessitent authenticate)
 // ----------------------------------------------------------------------
 
 /**
  * @route GET /api/v1/auth/me
- * Récupère le profil de l'utilisateur connecté
  */
 router.get(
     '/me',
@@ -70,12 +81,11 @@ router.patch(
 
 
 // ----------------------------------------------------------------------
-// 4. Routes Protégées et Autorisées (Rôles Spécifiques)
+// 5. Routes de Gestion (Rôles Spécifiques)
 // ----------------------------------------------------------------------
 
 /**
  * @route POST /api/v1/auth/staff/create
- * Seul un Admin d'Hôpital peut créer du personnel (Docteurs, etc.)
  */
 router.post(
     '/staff/create',

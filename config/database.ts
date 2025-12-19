@@ -55,12 +55,14 @@ export async function connectDB(): Promise<void> {
  * ATTENTION: Utilisez `force: true` uniquement en développement car cela supprime et recrée les tables.
  * Utilisez les migrations pour la production. `alter: true` est plus sûr mais aussi à utiliser avec précaution.
  */
+// src/config/database.ts
+
 export async function syncDbModels(): Promise<void> {
     try {
-        // ➡️ CORRECTION : DÉCOMMENTER L'APPEL À SYNC() pour créer les tables
-        await sequelize.sync({ force: true });
+        // ➡️ MODIFICATION : Utilisez 'alter' au lieu de 'force'
+        await sequelize.sync({ alter: true });
 
-        logger.info('All Sequelize models were synchronized successfully (database recreated).');
+        logger.info('Sequelize models synchronized successfully (data preserved).');
     } catch (error) {
         logger.error('Error synchronizing Sequelize models:', error);
         console.error(error);

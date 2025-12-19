@@ -1,22 +1,34 @@
-// src/models/user.ts (MISE À JOUR & CORRIGÉE)
-import { DataTypes, Model, Optional, BelongsToGetAssociationMixin, HasOneGetAssociationMixin, Sequelize } from 'sequelize';
+// src/models/user.ts
+import {
+    DataTypes,
+    Model,
+    Optional,
+    BelongsToGetAssociationMixin,
+    HasOneGetAssociationMixin,
+    Sequelize
+} from 'sequelize';
 import { AllModels } from './index';
 import Hospital from './hospital';
 import Doctor from './doctor';
 import Patient from './patient';
-import Role from './role'; // <-- NOUVEAU
+import Role from './role';
 
-// --- ATTRIBUTES & INTERFACES ---
+
 export interface UserAttributes {
     id: string;
     email: string;
-    password: string; // Hashé
+    password: string;
     roleId: string;
-    hospitalId: string | null; // ➡️ RENDU NULLABLE
+    hospitalId: string | null;
+    otpCode: string | null;
+    otpExpiresAt: Date | null;
+    isActive: boolean;            
 }
 
-// hospitalId ajouté à Optional (permet la création sans cet attribut)
-export interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'hospitalId'> {}
+// Champs optionnels lors de la création via User.create()
+export interface UserCreationAttributes extends Optional<UserAttributes,
+    'id' | 'hospitalId' | 'otpCode' | 'otpExpiresAt' | 'isActive'
+> {}
 
 // --- CLASS DEFINITION ---
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
@@ -24,7 +36,10 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
     public email!: string;
     public password!: string;
     public roleId!: string;
-    public hospitalId!: string | null; // ➡️ RENDU NULLABLE
+    public hospitalId!: string | null;
+    public otpCode!: string | null;
+    public otpExpiresAt!: Date | null;
+    public isActive!: boolean;
 
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
@@ -35,13 +50,13 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
     public getDoctor!: HasOneGetAssociationMixin<Doctor>;
     public getPatient!: HasOneGetAssociationMixin<Patient>;
 
-    // Propriétés de navigation
+    // Propriétés de navigation (chargées via include)
     public hospital?: Hospital;
     public role?: Role;
-    public doctor?: Doctor;
-    public patient?: Patient;
+    public doctorProfile?: Doctor;
+    public patientProfile?: Patient;
 
-    // --- Méthode statique pour INITIALISER le modèle ---
+    // --- INITIALISATION DU MODÈLE ---
     public static initialize(sequelizeInstance: Sequelize) {
         User.init(
             {
@@ -59,7 +74,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
                     field: 'email'
                 },
                 password: {
-                    type: DataTypes.STRING(255), // Doit être crypté
+                    type: DataTypes.STRING(255),
                     allowNull: false,
                     field: 'password_hash'
                 },
@@ -76,15 +91,31 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
                 },
                 hospitalId: {
                     type: DataTypes.UUID,
-                    allowNull: true, // ➡️ MODIFIÉ : Autoriser NULL
+                    allowNull: true,
                     field: 'hospital_id',
                     references: {
                         model: 'hospitals',
                         key: 'hospital_id',
                     },
                     onUpdate: 'CASCADE',
-                    // onDelete 'RESTRICT' peut rester car si l'hôpital est supprimé, l'utilisateur doit être traité
-                    onDelete: 'SET NULL', // ➡️ Recommandation : Mettre à NULL si l'hôpital est supprimé (pour Patient/Personnel, cela pourrait nécessiter une logique métier plus complexe)
+                    onDelete: 'SET NULL',
+                },
+                // --- Nouveaux champs OTP & Activation ---
+                otpCode: {
+                    type: DataTypes.STRING(6),
+                    allowNull: true,
+                    field: 'otp_code'
+                },
+                otpExpiresAt: {
+                    type: DataTypes.DATE,
+                    allowNull: true,
+                    field: 'otp_expires_at'
+                },
+                isActive: {
+                    type: DataTypes.BOOLEAN,
+                    defaultValue: false,
+                    allowNull: false,
+                    field: 'is_active'
                 },
             },
             {
@@ -92,20 +123,17 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
                 tableName: 'users',
                 timestamps: true,
                 modelName: 'User',
-                underscored: true,
+                underscored: true, // Gère automatiquement created_at / updated_at
             }
         );
     }
 
-    // --- Méthode statique pour définir les ASSOCIATIONS ---
+    // --- ASSOCIATIONS ---
     public static associate(models: AllModels) {
-        // Many-to-One avec Hospital (Ancrage)
         User.belongsTo(models.Hospital, { foreignKey: 'hospital_id', as: 'hospital' });
-
-        // Many-to-One avec Role (Un utilisateur a un rôle)
         User.belongsTo(models.Role, { foreignKey: 'role_id', as: 'role' });
 
-        // One-to-One conditional
+        // Correspondance avec les profils spécifiques
         User.hasOne(models.Doctor, { foreignKey: 'user_id', as: 'doctorProfile' });
         User.hasOne(models.Patient, { foreignKey: 'user_id', as: 'patientProfile' });
     }

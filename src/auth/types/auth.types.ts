@@ -10,6 +10,7 @@ export interface LoginRequest {
 }
 
 export interface PatientSignUpRequest {
+    [x: string]: string;
     email: string;
     password: string;
     firstName: string;

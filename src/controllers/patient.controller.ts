@@ -1,130 +1,123 @@
-// src/controllers/PatientController.ts
-
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '../auth/types/auth.types';
-import { PatientAttributes } from '../models/patient';
 import { PatientService } from '../services/patient.service';
-import { GetPatientsOptions, PatientPeriod } from '../types/patient.type';
-import { BadRequestError } from '../shared/errors/custom.error';
-
-const patientService = new PatientService();
+import { PatientPeriod, GetPatientsOptions } from '../types/patient.type';
 
 export class PatientController {
+    private patientService: PatientService;
 
-    /**
-     * @route GET /api/v1/patients/stats
-     */
-    public async getPatientStats(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
-        try {
-            // Correction Erreur 1: On extrait et on vérifie strictement la présence de l'ID
-            const hospitalId = req.user?.hospitalId;
-            
-            if (typeof hospitalId !== 'string') {
-                throw new BadRequestError("Hospital ID is missing or invalid in user token.");
-            }
-
-            const period = (req.query.period as PatientPeriod) || 'thisMonth';
-
-            // hospitalId est maintenant garanti d'être une string simple
-            const stats = await patientService.getPatientStats(hospitalId, period);
-            res.status(200).json(stats);
-        } catch (error) {
-            next(error);
-        }
+    constructor() {
+        this.patientService = new PatientService();
     }
 
-    /**
-     * @route GET /api/v1/patients
-     */
-    public async getPatients(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    public getPatients = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const hospitalId = req.user?.hospitalId; 
-            const superAdminFilter = req.query.hospitalId as string | undefined;
+            const hospitalId = (req as any).user.hospitalId as string;
 
             const options: GetPatientsOptions = {
                 page: parseInt(req.query.page as string) || 1,
                 limit: parseInt(req.query.limit as string) || 10,
-                search: req.query.search as string | undefined,
-                status: req.query.status as any,
-                hospitalId: superAdminFilter || undefined // Force undefined si null
+                search: req.query.search as string,
+                status: req.query.status as string,
+                hospitalId
             };
 
-            const role = req.user?.roleName;
-            let scopeId: string | undefined = undefined;
-
-            // Correction Erreur 2: On s'assure que scopeId ne reçoit jamais 'null'
-            if (role === 'Hospital Admin' || role === 'Doctor') {
-                if (hospitalId) scopeId = hospitalId;
-            }
-
-            if (!scopeId && !superAdminFilter && role !== 'Super Admin') {
-                throw new BadRequestError("L'ID de l'hôpital est requis pour cette opération.");
-            }
-
-            const data = await patientService.getPatients(scopeId, options);
-            res.status(200).json(data);
+            const result = await this.patientService.getPatients(options);
+            res.status(200).json(result);
         } catch (error) {
             next(error);
         }
-    }
+    };
 
-    /**
-     * @route GET /api/v1/patients/:id
-     */
-    public async getPatientById(req: Request, res: Response, next: NextFunction): Promise<void> {
+    public getPatientStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const patientId = req.params.id;
-            // Correction Erreur 3: On s'assure que patientId est bien défini
-            if (!patientId) throw new BadRequestError("Patient ID is required.");
+            const hospitalId = (req as any).user.hospitalId as string;
+            const period = (req.query.period as PatientPeriod) || 'thisMonth';
 
-            const patient = await patientService.getPatientById(patientId);
+            const stats = await this.patientService.getPatientStats(hospitalId, period);
+            res.status(200).json(stats);
+        } catch (error) {
+            next(error);
+        }
+    };
+
+    public getPatientById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const patientId = req.params.patientId as string;
+            const hospitalId = (req as any).user.hospitalId as string;
+
+            const patient = await this.patientService.getPatientById(patientId, hospitalId);
             res.status(200).json(patient);
         } catch (error) {
             next(error);
         }
-    }
+    };
 
-    /**
-     * @route PATCH /api/v1/patients/:id
-     */
-    public async updatePatient(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    public createPatient = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const patientId = req.params.id;
-            if (!patientId) throw new BadRequestError("Patient ID is required.");
+            const hospitalId = (req as any).user.hospitalId as string;
 
-            const updateData: Partial<PatientAttributes> = req.body;
-            const updatedPatient = await patientService.updatePatient(patientId, updateData);
-            res.status(200).json(updatedPatient);
-        } catch (error) {
-            next(error);
-        }
-    }
+            // MAPPING PRAGMATIQUE :
+            // On transforme les champs du formulaire frontend vers les colonnes Sequelize
+            const mappedData = {
+                firstName: req.body.patientFirstName,
+                lastName: req.body.patientLastName,
+                idNumber: req.body.healthCareNumber,
+                sex: req.body.sex,
+                dateOfBirth: req.body.dateOfBirth || null,
+                phone: req.body.phone || null,
+                email: req.body.email || null,
+                address: req.body.address || null,
+                hospitalId: hospitalId,
+                userId: null, // Autorisé par ta modification SQL
+                status: 'New Patient'
+            };
 
-    /**
-     * @route DELETE /api/v1/patients/:id
-     */
-    public async deletePatient(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
-        try {
-            const patientId = req.params.id;
-            if (!patientId) throw new BadRequestError("Patient ID is required.");
-
-            await patientService.deletePatient(patientId);
-            res.status(204).end();
-        } catch (error) {
-            next(error);
-        }
-    }
-
-    /**
-     * @route POST /api/v1/patients
-     */
-    public async createPatient(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
-        try {
-            const patientData: PatientAttributes = req.body;
-            const newPatient = await patientService.createPatient(patientData);
+            const newPatient = await this.patientService.createPatient(mappedData);
             res.status(201).json(newPatient);
         } catch (error) {
             next(error);
         }
+    };
+
+    // patient.controller.ts
+public updatePatient = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        console.log("ID reçu dans le controller:", req.params.patientId);
+
+        const patientId = req.params.patientId;
+        if (!patientId || patientId === 'undefined') {
+            res.status(400).json({ message: "L'identifiant du patient est requis." });
+            return;
+        }
+
+        const hospitalId = (req as any).user.hospitalId;
+
+        const updateData = {
+            firstName: req.body.patientFirstName,
+            lastName: req.body.patientLastName,
+            idNumber: req.body.healthCareNumber,
+            sex: req.body.sex,
+            phone: req.body.phone,
+            email: req.body.email,
+            address: req.body.address
+        };
+
+        const updatedPatient = await this.patientService.updatePatient(patientId, hospitalId, updateData);
+        res.status(200).json(updatedPatient);
+    } catch (error) {
+        next(error);
     }
+};
+
+    public deletePatient = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const patientId = req.params.patientId as string;
+            const hospitalId = (req as any).user.hospitalId as string;
+
+            await this.patientService.deletePatient(patientId, hospitalId);
+            res.status(204).send();
+        } catch (error) {
+            next(error);
+        }
+    };
 }

@@ -4,8 +4,8 @@ import Hospital from './hospital';
 import Doctor from './doctor';
 import Patient from './patient';
 import Exam from './exam';
+import Operation from './operation';
 
-// --- ATTRIBUTES & INTERFACES ---
 export enum AppointmentStatusEnum {
     SCHEDULED = 'SCHEDULED',
     COMPLETED = 'COMPLETED',
@@ -21,11 +21,13 @@ export interface AppointmentAttributes {
     doctorId: string;
     patientId: string;
     hospitalId: string;
+    operationId: string; // Lien vers l'acte spécifique choisi
+    notes: string | null;  // Champ "Say something..."
+    bookingNumber: string; // Code unique ex: "VRM112499"
 }
 
-export interface AppointmentCreationAttributes extends Optional<AppointmentAttributes, 'id'> {}
+export interface AppointmentCreationAttributes extends Optional<AppointmentAttributes, 'id' | 'notes' | 'status'> {}
 
-// --- CLASS DEFINITION ---
 class Appointment extends Model<AppointmentAttributes, AppointmentCreationAttributes> implements AppointmentAttributes {
     public id!: string;
     public startTime!: Date;
@@ -34,23 +36,20 @@ class Appointment extends Model<AppointmentAttributes, AppointmentCreationAttrib
     public doctorId!: string;
     public patientId!: string;
     public hospitalId!: string;
+    public operationId!: string;
+    public notes!: string | null;
+    public bookingNumber!: string;
 
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
 
-    // Mixins d'association
+    // Mixins
     public getHospital!: BelongsToGetAssociationMixin<Hospital>;
     public getDoctor!: BelongsToGetAssociationMixin<Doctor>;
     public getPatient!: BelongsToGetAssociationMixin<Patient>;
+    public getOperation!: BelongsToGetAssociationMixin<Operation>;
     public getExam!: HasOneGetAssociationMixin<Exam>;
 
-    // Propriétés de navigation
-    public hospital?: Hospital;
-    public doctor?: Doctor;
-    public patient?: Patient;
-    public exam?: Exam;
-
-    // --- Méthode statique pour INITIALISER le modèle ---
     public static initialize(sequelizeInstance: Sequelize) {
         Appointment.init(
             {
@@ -58,7 +57,6 @@ class Appointment extends Model<AppointmentAttributes, AppointmentCreationAttrib
                     type: DataTypes.UUID,
                     defaultValue: DataTypes.UUIDV4,
                     primaryKey: true,
-                    allowNull: false,
                     field: 'appointment_id'
                 },
                 startTime: {
@@ -75,65 +73,59 @@ class Appointment extends Model<AppointmentAttributes, AppointmentCreationAttrib
                     type: DataTypes.ENUM(...Object.values(AppointmentStatusEnum)),
                     allowNull: false,
                     defaultValue: AppointmentStatusEnum.SCHEDULED,
-                    field: 'status'
                 },
                 doctorId: {
                     type: DataTypes.UUID,
                     allowNull: false,
                     field: 'doctor_id',
-                    references: {
-                        model: 'doctors',
-                        key: 'doctor_id',
-                    },
-                    onUpdate: 'CASCADE',
-                    onDelete: 'RESTRICT', // On garde l'historique du RDV même si le doc part
+                    references: { model: 'doctors', key: 'doctor_id' }
                 },
                 patientId: {
                     type: DataTypes.UUID,
                     allowNull: false,
                     field: 'patient_id',
-                    references: {
-                        model: 'patients',
-                        key: 'patient_id',
-                    },
-                    onUpdate: 'CASCADE',
-                    onDelete: 'RESTRICT', // On garde l'historique du RDV même si le patient part (gestion des archives)
+                    references: { model: 'patients', key: 'patient_id' }
                 },
                 hospitalId: {
                     type: DataTypes.UUID,
                     allowNull: false,
                     field: 'hospital_id',
-                    references: {
-                        model: 'hospitals',
-                        key: 'hospital_id',
-                    },
-                    onUpdate: 'CASCADE',
-                    onDelete: 'RESTRICT',
+                    references: { model: 'hospitals', key: 'hospital_id' }
                 },
+                operationId: {
+                    type: DataTypes.UUID,
+                    allowNull: false,
+                    field: 'operation_id',
+                    references: { model: 'operations', key: 'operation_id' }
+                },
+                notes: {
+                    type: DataTypes.TEXT,
+                    allowNull: true,
+                },
+                bookingNumber: {
+                    type: DataTypes.STRING(20),
+                    allowNull: false,
+                    unique: true,
+                    field: 'booking_number'
+                }
             },
             {
                 sequelize: sequelizeInstance,
                 tableName: 'appointments',
-                timestamps: true,
-                modelName: 'Appointment',
                 underscored: true,
                 indexes: [
-                    // Index pour éviter les chevauchements basiques (doit être vérifié par logique métier aussi)
                     { fields: ['doctor_id', 'start_time', 'end_time'], name: 'idx_doctor_time_slot' },
-                    { fields: ['patient_id', 'start_time'] },
+                    { fields: ['booking_number'], unique: true }
                 ]
             }
         );
     }
 
-    // --- Méthode statique pour définir les ASSOCIATIONS ---
     public static associate(models: AllModels) {
-        // Many-to-One vers Hospital, Doctor, Patient
         Appointment.belongsTo(models.Hospital, { foreignKey: 'hospital_id', as: 'hospital' });
         Appointment.belongsTo(models.Doctor, { foreignKey: 'doctor_id', as: 'doctor' });
         Appointment.belongsTo(models.Patient, { foreignKey: 'patient_id', as: 'patient' });
-
-        // One-to-One vers Exam (Un RDV peut entraîner un examen)
+        Appointment.belongsTo(models.Operation, { foreignKey: 'operation_id', as: 'operation' });
         Appointment.hasOne(models.Exam, { foreignKey: 'appointment_id', as: 'exam' });
     }
 }
